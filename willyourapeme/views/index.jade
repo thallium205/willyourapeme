@@ -1,0 +1,120 @@
+extends layout
+
+block content
+    div.row-fluid
+        span8
+            h3 Will You Rape Me uses facial recognition to determine how likely a person will rape you by comparing their faces to the ones in the Nevada Sex Offender Registry.
+
+            div#photoHolder
+
+            div.dropper#drop_container
+                div#drop_zone Drag Over A Picture Of Potential Predator
+
+            button.btn#btnSubmit Submit
+
+            script
+                var payload = {};
+                var photo = null;
+
+                $("#btnSubmit").click(function() {
+                    var onProgress = function(e) {
+                        if (e.lengthComputable) {
+                            var percentComplete = (e.loaded/e.total)*100;
+                        }
+                    };
+
+                    var onReady = function(e) {
+                        // ready state
+                    };
+
+                    var onError = function(err) {
+                        // something went wrong with upload
+                        alert(err);
+                    };
+
+                    var onLoad = function () {
+                        if (xhr.status === 200) {
+                            console.log('all done: ' + xhr.status);
+                            } else {
+                            console.log('Something went terribly wrong...');
+                        }
+                    };
+
+                    var formData = new FormData();
+                    formData.append('file', photo);
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/search', true);
+                    xhr.addEventListener('error', onError, false);
+                    xhr.addEventListener('progress', onProgress, false);
+                    xhr.addEventListener('load', onLoad, false);
+                    xhr.addEventListener('readystatechange', onReady, false);
+                    xhr.send(formData);
+                });
+
+
+                $("#btnSubmit").attr("disabled", "disabled");
+                function handleFileSelect(evt) {
+                    evt.stopPropagation();
+                    evt.preventDefault();
+                    photo = evt.dataTransfer.files[0];
+                    // TODO - do some validation that its a picture
+                    var imageReader = new FileReader();
+                    imageReader.onload = (function (aFile) {
+                        return function (e) {
+                            $('#drop_container').remove();
+                            $('#photoHolder').append('<img id="photo" src="' + e.target.result + '"/>');
+                            resizePhoto();
+                            $('img#photo').imgAreaSelect({
+                                x1: 120,
+                                y1: 90,
+                                x2: 280,
+                                y2: 210,
+                                handles: true,
+                                onSelectEnd: function (img, selection) {
+                                    $("#btnSubmit").removeAttr("disabled");
+                                    payload.x1 = selection.x1;
+                                    payload.x2 = selection.x2;
+                                    payload.y1 = selection.y1;
+                                    payload.y2 = selection.y2;
+                                    // payload.photo = img;
+                                }
+                            });
+                        };
+                    })(photo);
+                    imageReader.readAsDataURL(photo);
+                }
+
+                function handleDragOver(evt) {
+                  evt.stopPropagation();
+                  evt.preventDefault();
+                  evt.dataTransfer.dropEffect = 'copy';
+                }
+
+                var dropZone = document.getElementById('drop_zone');
+                dropZone.addEventListener('dragover', handleDragOver, false);
+                dropZone.addEventListener('drop', handleFileSelect, false);
+
+                function resizePhoto() {
+                    var photo = $("img#photo");
+                    var maxWidth = 600;
+                    var maxHeight = 480;
+                    var ratio = 0;
+                    var width = photo.width();
+                    var height = photo.height();
+                    if (width > maxWidth) {
+                        ratio = (maxWidth / width);
+                        photo.attr({
+                            width : maxWidth,
+                            height : (height * ratio)
+                        });
+                        height = (height * ratio);
+                        width = (width * ratio);
+                        if (height > maxHeight) {
+                            ratio = (maxHeight / height);
+                            photo.attr({
+                                height : maxHeight,
+                                width : (width * ratio)
+                            });
+                        }
+                    }
+                }
