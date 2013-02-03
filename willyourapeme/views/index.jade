@@ -17,38 +17,30 @@ block content
                 var photo = null;
 
                 $("#btnSubmit").click(function() {
-                    var onProgress = function(e) {
-                        if (e.lengthComputable) {
-                            var percentComplete = (e.loaded/e.total)*100;
+
+                    var img = $('img#photo')[0];
+
+                    var canvas = document.createElement("canvas");
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+
+                    var ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0);
+
+                    var dataURL = canvas.toDataURL("image/png");
+
+                    payload.photo = dataURL.replace(/^data:image\/(png|jpg);base64,/, "");
+
+                    $.ajax({
+                        type: "POST",
+                        url: "/search",
+                        data: payload,
+                        success: function(data) {
+                            window.location.href = data.url;
                         }
-                    };
+                    });
 
-                    var onReady = function(e) {
-                        // ready state
-                    };
-
-                    var onError = function(err) {
-                        // something went wrong with upload
-                        alert(err);
-                    };
-
-                    var onLoad = function () {
-                        if (xhr.status === 200) {
-                            console.log('all done: ' + xhr.status);
-                            } else {
-                            console.log('Something went terribly wrong...');
-                        }
-                    };
-
-                    var formData = new FormData();
-                    formData.append('file', photo);
-                    var xhr = new XMLHttpRequest();
-                    xhr.open('POST', '/search', true);
-                    xhr.addEventListener('error', onError, false);
-                    xhr.addEventListener('progress', onProgress, false);
-                    xhr.addEventListener('load', onLoad, false);
-                    xhr.addEventListener('readystatechange', onReady, false);
-                    xhr.send(formData);
+                    return false;
                 });
 
 
@@ -76,7 +68,6 @@ block content
                                     payload.x2 = selection.x2;
                                     payload.y1 = selection.y1;
                                     payload.y2 = selection.y2;
-                                    // payload.photo = img;
                                 }
                             });
                         };

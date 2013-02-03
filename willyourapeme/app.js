@@ -9,8 +9,7 @@ var express = require('express')
     , async = require('async')
     , exec = require('child_process').exec
     , easyimg = require('easyimage')
-    , uuid = require('node-uuid')
-    , formidable = require('formidable');
+    , uuid = require('node-uuid');
 
 var app = express();
 
@@ -42,90 +41,77 @@ app.configure('development', function(){
 });
 
 app.get('/', function(req, res) {
-    res.render('index.jade');
+
     //recognize("/Users/johnrussell/Desktop/input.jpg", function(err, offender) {
     //    res.send(JSON.stringify(offender));
     //});
+
+    res.render('index.jade');
 });
 
 app.post('/search', function(req, res) {
+    var imgId = uuid.v1();
+    var payload = req.body;
 
-    console.log('Fired!');
+    var x1 = payload.x1;
+    var x2 = payload.x2;
+    var y1 = payload.y1;
+    var y2 = payload.y2;
+    var img = payload.photo;
 
-    var form = new formidable.IncomingForm();
-    form.uploadDir = __dirname;
-    form.encoding = 'binary';
-
-    form.addListener('file', function(name, file) {
-        console.log(name);
-        console.log(JSON.stringify(file));
-    });
-
-    form.addListener('end', function() {
-        res.end();
-    });
-
-    form.parse(req, function(err, fields, files) {
-        if (err) {
-            console.log(err);
-        }
-
-        console.log('fields=' + JSON.stringify(fields));
-    });
-
-    console.log('Done!');
-
-
-    /*
-
-    var picId = uuid.v1();
-
-    if (req.xhr) {
-        console.log('It was!');
-        console.log(JSON.stringify(req.xhr));
-    }
-
-    console.log(JSON.stringify(req.body));
-
-    var x1 = req.body.payload.x1;
-    var x2 = req.body.payload.x2;
-    var y1 = req.body.payload.y1;
-    var y2 = req.body.payload.y2;
-    var img = req.body.payload.photo;
-
-    console.log(x1);
+    var dataBuffer = new Buffer(img, 'base64');
+    console.log(__dirname + '/public/images/' + imgId);
+    fs.writeFileSync(imgId, dataBuffer);
 
     var width = x2 - x1 + 1;
     var height = y2 - y1 + 1;
 
-    console.log('IMG=' + JSON.stringify(img));
-
-    fs.writeFile(picId + '.jpg', img, function(err) {
-        if(err) {
+    easyimg.info(imgId, function(err,stdout,stderr) {
+        if (err) {
             console.log(err);
-        } else {
-            easyimg.rescrop({
-                    src: picId + '.jpg', dst: picId + '.jpg',
-                    width: 600, height: 480,
-                    cropwidth: width, cropheight: height,
-                    x: x1, y: y1,
-                    gravity: 'NorthWest',
-                    quality: 100
-                },
-                function(err, stdout, stderr) {
-                    if (err) console.log(err);
-                    console.log(stderr);
-                    console.log(stdout);
-                }
-            );
+            return res.end('You need to upload an image.');
         }
-    });
 
-    */
+        easyimg.crop({
+                src: imgId, dst: 'public/images/' + imgId,
+                cropwidth: width, cropheight: height,
+                x: x1, y: y1,
+                gravity: 'NorthWest',
+                quality: 100
+            },
+            function(err, stdout, stderr) {
+                fs.unlink(imgId);
+                if (err) {
+                    console.log(err);
+                    return res.end('Something bad happened.  Sorry!');
+                }
+
+                recognize('public/images/' + imgId, function(err, offenders) {
+                    if (err) {
+                        console.log(err);
+                        return res.end('The facial recognition engine barfed. :(');
+                    }
+                    return res.json({url: '/result?user=' + imgId + '&offender=' + offenders.pop()['_id']});
+                });
+            }
+        );
+    });
 });
 
 app.get('/result', function(req, res) {
-    res.render('result.jade', {title: 'RESULTS'});
+    if (req.query.user && req.query.offender) {
+        OffenderModel.find({_id: req.query.offender}, function (err, offenders) {
+            if (err) {
+              res.send('Unable to find the user!' + err);
+            } else if (offenders && offenders.length > 0) {
+                res.render('result.jade', {user: req.query.a, offender: offenders.pop()});
+            } else {
+                res.send('Unable to find the user!');
+            }
+        });
+    } else {
+        res.send('Invalid url provided!')
+    }
 });
 
 http.createServer(app).listen(app.get('port'), function(){
@@ -139,9 +125,6 @@ function recognize(path, callback) {
     exec("../Recognizer/Recognizer recognize " + path, function (error, stdout, stderr) {
         if (error) callback(error);
         var result = JSON.parse(stdout);
-
-        console.log(JSON.stringify(result));
-
         OffenderModel.find({id: result.prediction}, function (err, offenders) {
             callback(null, offenders);
         });
@@ -164,6 +147,7 @@ function train(callback) {
             offender.pics.forEach(function(pic) {
               pics ++;
                if (pic.local !== 'default.jpg') {
+                   // TODO
                    fs.appendFileSync('../data/pics.csv', '/Users/johnrussell/Documents/workspace/willyourapeme/data/pics/' + pic.local +  ';' + offender.id + '\r\n');
                     if (offenderCount === offenders.length && pics ===offender.pics.length) {
                         exec("../Recognizer/Recognizer train ../data/pics.csv", function (error, stdout, stderr) {
